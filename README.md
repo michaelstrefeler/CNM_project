@@ -49,14 +49,145 @@ This approach aligns with the principles of Amdahl's Law, which emphasizes impro
 
 ## Stage 3 - Acceleration
 
-TODO
+We had to separate our code into two files (because it wouldn't work in one file), `mandelbrot_host.cpp` and `mandelbrot_device.cu`, the first one contains the host code (OpenMP and rest of code) and the second one contains the device/GPU code.
+
+Here's how we compile it :
+
+```bash
+nvcc -c mandelbrot_device.cu -o mandelbrot_device.o
+g++ -std=c++11 mandelbrot_host.cpp mandelbrot_device.o -o mandelbrot_acceleration -lsfml-graphics -lsfml-window -lsfml-system -fopenmp -lcudart
+```
+
+The first line is to compile the device code and the second one is to compile the rest and link everything together. The first 3 flags (-lsfml-graphics -lsfml-window -lsfml-system) are required to use the SFML library, `-fopenmp` is for OpenMP and `-lcudart` links against the NVIDIA CUDA runtime library.
+
+### CPU Acceleration (with OpenMP)
+
+The `computeMandelbrotOpenMP` function calculates the fractal on the CPU. Its nested loops process each pixel independently, making it ideal for parallelization.
+We added OpenMP directives to parallelize the outer loop, splitting the workload across multiple CPU threads.
+
+Here's how we accelerated it (in the `computeMandelbrotOpenMP` function):
+
+```cpp
+  std::vector<sf::Uint8> computeMandelbrotOpenMP(unsigned width, unsigned height,
+                                               double minX, double maxX,
+                                               double minY, double maxY,
+                                               unsigned maxIter) {
+    std::vector<sf::Uint8> pixels(width * height * 4); // RGBA
+
+    #pragma omp parallel for collapse(2)
+    for (unsigned py = 0; py < height; ++py) {
+        for (unsigned px = 0; px < width; ++px) {
+            double x0 = minX + (px / (double)width) * (maxX - minX);
+            double y0 = minY + (py / (double)height) * (maxY - minY);
+
+            std::complex<double> c(x0, y0);
+            std::complex<double> z(0, 0);
+
+            unsigned iteration = 0;
+            while (std::abs(z) < 2.0 && iteration < maxIter) {
+                z = z * z + c;
+                iteration++;
+            }
+
+            double t = (double)iteration / (double)maxIter;
+            sf::Uint8 r = static_cast<sf::Uint8>(9 * (1 - t) * t * t * t * 255);
+            sf::Uint8 g = static_cast<sf::Uint8>(15 * (1 - t) * (1 - t) * t * t * 255);
+            sf::Uint8 b = static_cast<sf::Uint8>(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255);
+
+            unsigned index = 4 * (py * width + px);
+            pixels[index + 0] = r;
+            pixels[index + 1] = g;
+            pixels[index + 2] = b;
+            pixels[index + 3] = 255;
+        }
+    }
+
+    return pixels;
+}
+```
+
+### GPU Acceleration (with CUDA)
+
+The `computeMandelbrotCUDA` function processes each pixel in parallel on the GPU. We used **cuComplex** for complex number calculations, as it is optimized for GPU operations.
+
+Here's the code we used to create the kernel:
+
+```cpp
+__global__ void computeMandelbrotCUDA(unsigned char* pixels, unsigned width, unsigned height,
+                                      double minX, double maxX, double minY, double maxY, unsigned maxIter) {
+    int px = blockIdx.x * blockDim.x + threadIdx.x;
+    int py = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (px < width && py < height) {
+        double x0 = minX + (px / (double)width) * (maxX - minX);
+        double y0 = minY + (py / (double)height) * (maxY - minY);
+
+        cuDoubleComplex c = make_cuDoubleComplex(x0, y0);
+        cuDoubleComplex z = make_cuDoubleComplex(0, 0);
+
+        unsigned iteration = 0;
+        while (cuCabs(z) < 2.0 && iteration < maxIter) {
+            z = cuCadd(cuCmul(z, z), c);
+            iteration++;
+        }
+
+        double t = (double)iteration / (double)maxIter;
+        unsigned char r = (unsigned char)(9 * (1 - t) * t * t * t * 255);
+        unsigned char g = (unsigned char)(15 * (1 - t) * (1 - t) * t * t * 255);
+        unsigned char b = (unsigned char)(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255);
+
+        int index = 4 * (py * width + px);
+        pixels[index + 0] = r;
+        pixels[index + 1] = g;
+        pixels[index + 2] = b;
+        pixels[index + 3] = 255;
+    }
+}
+```
+
+We run the kernel like so:
+
+```cpp
+  dim3 block(16, 16);
+  dim3 grid((WIDTH + block.x - 1) / block.x, (HEIGHT + block.y - 1) / block.y);
+  computeMandelbrotCUDA<<<grid, block>>>(devicePixels, WIDTH, HEIGHT, minX, maxX, minY, maxY, MAX_ITER);
+```
 
 ## Stage 4 - Analysis of results
 
+### Analysis of the results
+
 We were unable to run the program on the card (we couldn't install everything on), but luckily one of our laptops has a Nvidia GPU, so we could run it there.
 
-With CUDA it took 0.69 seconds for the initial fractal and 0.58 seconds for the next zoom (we used `WIDTH` = 1000, `HEIGHT` = 800, and `MAX_ITER` = 3000)
+Here are the results using `WIDTH` = 1000, `HEIGHT` = 800, and `MAX_ITER` = 3000
 
-With OpenMP it took 2.13 seconds and then 9.07 seconds (with the same parameters).
+| Computation Stage       | Original Code (seconds) | OpenMP (seconds) | CUDA (seconds) |
+|-----------------------------|----------------------------|-----------------------|--------------------|
+| Initial Mandelbrot          | 6.5155                    | 2.08163              | 0.689945           |
+| Mandelbrot Zoom 1           | 75.2991                   | 7.74693              | 0.705067           |
+| Mandelbrot Zoom 2           | 40.892                    | 8.95785              | 0.764674           |
+| Mandelbrot Zoom 3           | 45.0272                   | 4.66551              | 0.642998           |
+| Mandelbrot Zoom 4           | 59.3526                   | 8.74846              | 0.842222           |
 
-Both optimizations are way faster than the base code.
+The differences in execution times are influenced by the varying complexity of the Mandelbrot set's zoom regions, as some require more iterations per pixel near the set's boundary. This variability adds to the performance differences observed across the original code, OpenMP, and CUDA, with CUDA remaining the fastest despite the computational intensity of each zoom.
+
+1. **OpenMP Acceleration**:
+   - OpenMP consistently reduced execution time across all stages, achieving a **3x–10x improvement** over the original code.
+   - Performance variations between zooms indicate the effect of varying computational loads on the CPU.
+
+2. **CUDA Acceleration**:
+   - CUDA provided the fastest execution times for all computations, achieving up to **100x improvement** over the original code for certain zooms.
+   - The GPU's ability to handle thousands of threads in parallel ensures near-constant performance even for regions with higher complexity.
+
+3. **Impact of Zoom Complexity**:
+   - Zoom regions with more points closer to the Mandelbrot set boundary required more iterations per pixel, leading to longer computation times across all implementations.
+   - However, CUDA’s performance was the least affected by this variation, demonstrating its scalability for computationally intensive tasks.
+
+**CUDA** is the clear winner in terms of raw performance, consistently outperforming both the original code and OpenMP. It is the best choice for accelerating highly parallelizable tasks like Mandelbrot fractal computation.
+**OpenMP** offers a substantial improvement over the original code and is a suitable alternative for systems without GPUs.
+
+The performance differences between zooms highlight the importance of computational load and how different implementations handle it. CUDA demonstrates the best scalability, making it ideal for scenarios involving variable computational complexity.
+
+### Potential future lines
+
+We managed to accelerate our code quite a bit (especially with CUDA), so we don't see any future lines
