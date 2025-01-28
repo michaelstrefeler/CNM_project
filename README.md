@@ -197,10 +197,6 @@ The performance differences between zooms highlight the importance of computatio
    - Utilized thousands of GPU cores to compute each pixel in parallel.
    - High throughput and optimized memory access patterns (e.g., coalesced memory access) significantly reduced computation times.
 
-### Potential future lines
-
-We managed to accelerate our code quite a bit (especially with CUDA), so we don't see any future lines
-
 New Bottlenecks
 
 1. **CPU with OpenMP**:
@@ -210,6 +206,8 @@ New Bottlenecks
    - **Memory transfer overhead**: Host-to-device and device-to-host memory transfers are relatively slow, introducing a bottleneck, especially for small data sizes.
    - **Compute-bound regions**: For highly complex zoom regions, the kernel's computational intensity becomes the bottleneck.
    - **Roofline model link**: CUDA achieves high computational throughput but is limited by memory-bound operations, particularly during frequent host-device data transfers.
+
+### Potential future lines
 
 What else to accelerate?
 
