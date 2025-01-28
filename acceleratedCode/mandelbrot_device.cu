@@ -13,8 +13,6 @@ __global__ void computeMandelbrotCUDA(unsigned char* pixels, unsigned width, uns
         double x0 = minX + (px / (double)width) * (maxX - minX);
         double y0 = minY + (py / (double)height) * (maxY - minY);
 
-        //std::complex<double> c(x0, y0);
-        //std::complex<double> z(0, 0);
         cuDoubleComplex c = make_cuDoubleComplex(x0, y0);
         cuDoubleComplex z = make_cuDoubleComplex(0, 0);
 
@@ -42,20 +40,18 @@ extern "C" void launchMandelbrotCUDA(unsigned char* hostPixels, unsigned width, 
     unsigned char* d_pixels;
     size_t dataSize = width * height * 4;
 
-    // Allocate memory on the device
+    // Allocation mémoire
     cudaMalloc(&d_pixels, dataSize);
 
-    // Configure grid and block dimensions
     dim3 block(16, 16);
     dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
 
-    // Launch the kernel
     computeMandelbrotCUDA<<<grid, block>>>(d_pixels, width, height, minX, maxX, minY, maxY, maxIter);
     cudaDeviceSynchronize();
 
-    // Copy data back to host
+    // Recopier les résultats du GPU à l'hôte
     cudaMemcpy(hostPixels, d_pixels, dataSize, cudaMemcpyDeviceToHost);
 
-    // Free device memory
+    // Libération de la mémoire
     cudaFree(d_pixels);
 }

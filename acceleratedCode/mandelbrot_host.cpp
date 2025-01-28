@@ -27,9 +27,6 @@ double maxY = 2.4; //1.2;
 extern "C" void launchMandelbrotCUDA(unsigned char* hostPixels, unsigned width, unsigned height,
                                      double minX, double maxX, double minY, double maxY, unsigned maxIter);
 
-
-
-
 // ---------------------------------------------------------------------------
 // Fonction CPU avec OpenMP pour calculer la fractale de Mandelbrot
 // ---------------------------------------------------------------------------
@@ -77,7 +74,7 @@ int main()
     window.setFramerateLimit(30);
 
     std::vector<sf::Uint8> pixelData(WIDTH * HEIGHT * 4);
-    bool useGPU = false; // Toggle between CPU (false) and GPU (true)
+    bool useGPU = true; // true = OpenMP, false = CUDA
 
     // Mesurer le temps de calcul de la fractale
     auto start = std::chrono::high_resolution_clock::now();

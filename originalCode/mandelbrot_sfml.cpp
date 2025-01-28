@@ -1,5 +1,5 @@
 // Compiler :
-// g++ -std=c++11 mandelbrot_sfml.cpp -o mandelbrot_sfml     -lsfml-graphics -lsfml-window -lsfml-system
+// g++ -std=c++11 mandelbrot_sfml.cpp -o mandelbrot_sfml -lsfml-graphics -lsfml-window -lsfml-system
 
 #include <SFML/Graphics.hpp>
 #include <complex>
@@ -50,8 +50,7 @@ std::vector<sf::Uint8> computeMandelbrot(unsigned width, unsigned height,
             // On normalise l'itération dans [0,1]
             double t = (double)iteration / (double)maxIter;
 
-            // Exemple simple : on fait un dégradé de bleu
-            // Libre à vous de tester d'autres mappings de couleurs
+            // On fait un dégradé de bleu
             sf::Uint8 r = static_cast<sf::Uint8>(9 * (1 - t) * t * t * t * 255);
             sf::Uint8 g = static_cast<sf::Uint8>(15 * (1 - t) * (1 - t) * t * t * 255);
             sf::Uint8 b = static_cast<sf::Uint8>(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255);
