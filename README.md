@@ -188,6 +188,53 @@ The differences in execution times are influenced by the varying complexity of t
 
 The performance differences between zooms highlight the importance of computational load and how different implementations handle it. CUDA demonstrates the best scalability, making it ideal for scenarios involving variable computational complexity.
 
+**Source of Improvement**:
+
+1. **OpenMP**:
+   - Parallelized the computation by splitting pixel rows among CPU threads, reducing the sequential nature of the original code.
+   - Speedup is proportional to the number of available CPU cores, minus some overhead for thread synchronization.
+2. **CUDA**:
+   - Utilized thousands of GPU cores to compute each pixel in parallel.
+   - High throughput and optimized memory access patterns (e.g., coalesced memory access) significantly reduced computation times.
+
 ### Potential future lines
 
 We managed to accelerate our code quite a bit (especially with CUDA), so we don't see any future lines
+
+New Bottlenecks
+
+1. **CPU with OpenMP**:
+   - **Memory bandwidth**: The CPU may struggle with memory access when threads compete for the same shared resources, limiting further scalability.
+   - **Thread synchronization overhead**: Even with OpenMP, the synchronization overhead becomes noticeable as the number of threads increases.
+2. **GPU with CUDA**:
+   - **Memory transfer overhead**: Host-to-device and device-to-host memory transfers are relatively slow, introducing a bottleneck, especially for small data sizes.
+   - **Compute-bound regions**: For highly complex zoom regions, the kernel's computational intensity becomes the bottleneck.
+   - **Roofline model link**: CUDA achieves high computational throughput but is limited by memory-bound operations, particularly during frequent host-device data transfers.
+
+What else to accelerate?
+
+1. **Memory Transfers**:
+   - Reduce host-device memory transfers by keeping data on the GPU as much as possible during iterative zoom computations.
+   - Implement **pinned memory** to speed up data transfers.
+2. **Dynamic Iteration Limits**:
+   - Instead of using a static `MAX_ITER`, dynamically adjust the iteration limit for each pixel based on its proximity to the Mandelbrot set boundary.
+   - This would reduce unnecessary computations for pixels that converge quickly.
+3. **Shared Memory Optimization**:
+   - Use CUDA shared memory to cache frequently accessed values, reducing global memory access overhead.
+
+Could something have been done differently?
+
+1. **Algorithmic Optimization**:
+   - Incorporate early bailout strategies for regions of the Mandelbrot set that converge rapidly.
+   - Use adaptive mesh refinement to focus computational resources on complex areas.
+2. **Work Distribution**:
+   - For OpenMP, experiment with **dynamic scheduling** to balance the workload more evenly across threads.
+   - For CUDA, fine-tune thread block sizes to achieve optimal occupancy and performance.
+3. **Data Structure Changes**:
+   - Explore using single-channel grayscale textures instead of RGBA if color interpolation isn't a priority, reducing memory and computation overhead.
+4. **Multi-GPU Scalability**:
+   - Distribute the workload across multiple GPUs to handle larger resolutions or higher iteration limits more efficiently.
+
+### **Conclusion**
+
+The performance improvements achieved through OpenMP and CUDA demonstrate the potential of parallel computing for intensive tasks like Mandelbrot fractal generation. While CUDA provides exceptional acceleration, bottlenecks like memory transfers and computational intensity in complex regions remain areas for improvement. Future efforts should focus on reducing memory overhead, optimizing workload distribution, and exploring algorithmic enhancements to further accelerate the application.
